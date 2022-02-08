@@ -1,0 +1,6 @@
+{
+    "files.exclude": {
+        "**/main": true
+    },
+    "files.autoSave": "afterDelay"
+}
