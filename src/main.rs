@@ -2,6 +2,7 @@ use std::{
     env, fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    path::Path,
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -29,6 +30,20 @@ fn main() {
 
 fn handle_connection(mut stream: TcpStream, options: MutexGuard<Options>) {
     let mut buffer = [0; 1024];
+    let not_found_content = format!(
+        r#"<!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>Hello!</title>
+          </head>
+          <body>
+            <h1>Oops!</h1>
+            <p>Sorry, I don't know what you're asking for.</p>
+          </body>
+        </html>
+        "#
+    );
     stream.read(&mut buffer).unwrap();
     let request_str = String::from_utf8_lossy(&buffer).to_string();
     let request_line = request_str.lines().next().unwrap();
@@ -36,14 +51,17 @@ fn handle_connection(mut stream: TcpStream, options: MutexGuard<Options>) {
     let method = request_characters[0];
     let uri = request_characters[1];
     let (status_line, contents) = if GET.eq(method) {
-        let file_path = format!("{}{}", options.path, uri);
+        let root_path = Path::new(&options.path).canonicalize().unwrap();
+        let relative_uri = uri.get(1..).unwrap();
+        let file_path = root_path.join(relative_uri);
+        println!("request file: {}", file_path.to_string_lossy());
         let contents = fs::read_to_string(file_path);
         match contents {
             Ok(con) => (SUCCESS, con),
-            Err(_) => (NOT_FOUND, "".to_string()),
+            Err(_) => (NOT_FOUND, not_found_content),
         }
     } else {
-        (NOT_FOUND, "".to_string())
+        (NOT_FOUND, not_found_content)
     };
     let response = format!(
         "{}\r\nContent-Length: {}\r\n\r\n{}",
